@@ -20,6 +20,7 @@ plot_time_mean(tm);
 plot_time_autocorrelation(tm_autocorrelation_function,ensemble_array);
 calculate_BW(ensemble_array,autocorrelation_average_Ravg,size(ensemble_array,2));
 is_process_stationary(sm,choice,autocorrelation_average_Ravg);
+is_process_ergoidic(sm,tm,tm_autocorrelation_function,choice,autocorrelation_average_Ravg);
 %%Functions%%
 function ensemble = generate_ensemble(choice,number_of_realizations,bits_per_realization,required_bits_per_realization,samples_per_bit)
     %   This is an ensemble generator function.
@@ -306,4 +307,27 @@ function is_process_stationary(statistical_mean,choice,autocorrelation)
     legend show;
     grid on;
     hold off;
+end
+
+function is_process_ergoidic(statistical_mean,time_mean,time_autocorrelation,choice,autocorrelation)
+    avg_value_sm = mean(statistical_mean);
+    avg_value_tm = mean(time_mean);
+    figure;
+    %plot(statistical_mean, 'LineWidth', 1.5);
+    subplot(1,2,1);
+    plot(statistical_mean, 'LineWidth', 1.5, 'DisplayName', ['Average mean = ', num2str(avg_value_sm)]);
+    xlabel('Time (samples)');
+    ylabel('Mean Value');
+    title('Statistical Mean of the Ensemble');
+    legend show;
+    grid on;
+    xlim([1 length(statistical_mean)]);
+    subplot(1,2,2);
+    plot(time_mean, 'LineWidth', 1.5, 'DisplayName', ['Average mean = ', num2str(avg_value_tm)]);
+    xlabel('Realizations');
+    ylabel('Mean Value');
+    title('time Mean of the Realizations');
+    legend show;
+    grid on;
+    xlim([1 length(time_mean)]);
 end
