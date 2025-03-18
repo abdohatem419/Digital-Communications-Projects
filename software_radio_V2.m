@@ -18,7 +18,7 @@ tm = get_time_mean(ensemble_array);
 plot_time_mean(tm);
 [tm_autocorrelation,tm_autocorrelation_function] = get_time_autocorrelation(ensemble_array);
 plot_time_autocorrelation(tm_autocorrelation_function,ensemble_array);
-calculate_BW(ensemble_array,autocorrelation_average_Ravg,size(ensemble_array,2));
+calculate_BW(ensemble_array,autocorrelation_average_Ravg,size(ensemble_array,2),choice);
 is_process_stationary(sm,choice,autocorrelation_average_Ravg);
 is_process_ergoidic(sm,tm,tm_autocorrelation_function,choice,autocorrelation_average_Ravg);
 %%Functions%%
@@ -256,50 +256,107 @@ function plot_time_autocorrelation(time_autocorrelation_function,ensemble)
     hold off;
 end
 
-function calculate_BW(ensemble,autocorrelation_average,number_of_samples)
-    %Bandwidth calculation
+function calculate_BW(ensemble, autocorrelation_average, number_of_samples, choice)
+    % Bandwidth calculation
     k = -number_of_samples + 1: number_of_samples - 1;
     fs = 100;  % Sampling frequency
+    
+    % Compute the Power Spectral Density (PSD)
     psd = abs(fftshift(fft(autocorrelation_average)));
+    
+    % Define parameters
+    A = 4;
+    T = 7;
+    
+    % Define the triangular function in time domain
+    Tri = @(x, a) max(1 - abs(x) / (a / 2), 0);
+    tau_values = -number_of_samples + 1:number_of_samples - 1;
+    
+    % Frequency axis
+    freq_axis = k * fs / (2 * number_of_samples);
+    
+    % Plot PSD
     figure;
-    plot(k * fs / (2 * number_of_samples), psd, 'b', 'LineWidth', 1.5);
-    title("PSD");
-    xlabel("Frequency (Hz)");
-    ylabel("PSD");
-    % Zoom into relevant range
+    hold on;
+    plot(freq_axis, psd, 'k', 'LineWidth', 2, 'DisplayName', 'Average PSD');
+    
+    % Compute and plot based on choice
+    switch choice
+        case 1 % Unipolar
+            Rx_unipolar = (A^2 / 4) * Tri(tau_values, 2*T) + (A^2 / 4);
+            psd_unipolar = abs(fftshift(fft(Rx_unipolar)));
+            plot(freq_axis, psd_unipolar, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Unipolar PSD');
+        case 2 % Polar NRZ
+            Rx_polar_nrz = (A^2) * Tri(tau_values, 2*T);
+            psd_polar_nrz = abs(fftshift(fft(Rx_polar_nrz)));
+            plot(freq_axis, psd_polar_nrz, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Polar NRZ PSD');
+        case 3 % Polar RZ
+            Rx_polar_rz = (A^2 / 2) * Tri(tau_values, 2*T);
+            psd_polar_rz = abs(fftshift(fft(Rx_polar_rz)));
+            plot(freq_axis, psd_polar_rz, 'g--', 'LineWidth', 1.5, 'DisplayName', 'Polar RZ PSD');
+    end
+    
     % Highlight zero-crossing point
     [~, zero_idx] = min(abs(psd)); % Find nearest zero-crossing index
-    hold on;
-    plot(k(zero_idx) * fs / (2 * number_of_samples), psd(zero_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
+    plot(freq_axis(zero_idx), psd(zero_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2, 'DisplayName', 'Zero-Crossing');
+    
+    title("Power Spectral Density (PSD)");
+    xlabel("Frequency (Hz)");
+    ylabel("PSD");
+    legend show;
+    grid on;
     hold off;
 end
 
-function is_process_stationary(statistical_mean,choice,autocorrelation)
+function is_process_stationary(statistical_mean, choice, autocorrelation)
+    % Define parameters
+    A = 4;  % Amplitude
+    T = 7;  % Bit Period in Samples
+    tau_values = -699:699;
+    
+    % Define the triangular function
+    Tri = @(x, a) max(1 - abs(x) / (a / 2), 0); % Tri function with width a
+    
     % Compute the average of statistical_mean
     avg_value = mean(statistical_mean);
     figure;
-    %plot(statistical_mean, 'LineWidth', 1.5);
     plot(statistical_mean, 'LineWidth', 1.5, 'DisplayName', ['Average mean = ', num2str(avg_value)]);
-        if choice == 1
-            yline(2, '--r', 'LineWidth', 1.5, 'DisplayName', ['Theoritical mean = ', num2str(2)]);
-        elseif choice == 2
-            yline(0, '--r', 'LineWidth', 1.5, 'DisplayName', ['Theoritical mean = ', num2str(0)]);
-        elseif choice == 3
-           yline(0, '--r', 'LineWidth', 1.5, 'DisplayName', ['Theoritical mean = ', num2str(0)]);
-        end
+    hold on;
+    if choice == 1
+        yline(2, '--r', 'LineWidth', 1.5, 'DisplayName', ['Theoretical mean = ', num2str(2)]);
+    elseif choice == 2 || choice == 3
+        yline(0, '--r', 'LineWidth', 1.5, 'DisplayName', ['Theoretical mean = ', num2str(0)]);
+    end
+    hold off;
     xlabel('Time (samples)');
     ylabel('Mean Value');
     title('Statistical Mean of the Ensemble');
     legend show;
     grid on;
     xlim([1 length(statistical_mean)]);
-    tau_values = -699:699;
-    % Create figure
+    
+    % Create figure for autocorrelation function
     figure;
     hold on;
+    
     % Plot the averaged autocorrelation in bold
     plot(tau_values, autocorrelation, 'k', 'LineWidth', 2.5, 'DisplayName', ...
-    sprintf('Average R_x(\\tau), R(0) = %.2f , DC = %.2f', autocorrelation(1,1),mean(autocorrelation)));
+        sprintf('Average R_x(\tau), R(0) = %.2f , DC = %.2f', autocorrelation(700), mean(autocorrelation(499+700:699+700))));
+    
+    % Switch case for different choices to sketch the theoretical
+    % autocorrelation function:
+    switch choice
+        case 1
+            Rx_tau = ((A^2)/4) * Tri(tau_values, 2*T) + (A^2)/4;
+            plot(tau_values, Rx_tau, 'b--', 'LineWidth', 2, 'DisplayName', 'R_x(\tau) theoretical for Unipolar NRZ');
+        case 2
+            Rx_tau = (A^2) * Tri(tau_values, 2*T);
+            plot(tau_values, Rx_tau, 'r--', 'LineWidth', 2, 'DisplayName', 'R_x(\tau) theoretical for Polar NRZ');
+        case 3
+            Rx_tau = ((A^2)/2) * Tri(tau_values, 2*T);
+            plot(tau_values, Rx_tau, 'g--', 'LineWidth', 2, 'DisplayName', 'R_x(\tau) theoretical for Polar RZ');
+    end
+    
     % Labels and title
     xlabel('\tau (Time Shift)');
     ylabel('Autocorrelation R_x(t_1, \tau)');
