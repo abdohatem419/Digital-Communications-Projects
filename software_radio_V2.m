@@ -13,7 +13,7 @@ sm = get_statistical_mean(ensemble_array);
 plot_statistical_mean(sm);
 [autocorrelation_R,autocorrelation_average_Ravg] = get_autocorrelation(ensemble_array);
 t1_values  = [1,100,120];
-plot_autocorrelation(autocorrelation_R, autocorrelation_average_Ravg, (size(ensemble_array,2)-1), t1_values);
+plot_autocorrelation(autocorrelation_R, autocorrelation_average_Ravg, size(ensemble_array,2), t1_values);
 tm = get_time_mean(ensemble_array);
 plot_time_mean(tm);
 [tm_autocorrelation,tm_autocorrelation_function] = get_time_autocorrelation(ensemble_array);
@@ -120,34 +120,42 @@ function plot_statistical_mean(statistical_mean)
 end
 
 function [autocorrelation,autocorrelation_average] = get_autocorrelation(ensemble)
-    %   This function computes the autocorrelation function Rx(t1, tau).
-    %   The output is a 2D array where each row represents Rx(t1, tau)
-    %   for different values of t1 (from 1 to number_of_samples).
+%   This function computes the autocorrelation function Rx(t1, tau).
+%   The output is a 2D array where each row represents Rx(t1, tau)
+%   for different values of t1 (from 1 to number_of_samples).
 
-    if ~ismatrix(ensemble)
-        error('Invalid Input to Function, please provide a 2D array that represents an ensemble of realizations of a random process');
-    end    
+if ~ismatrix(ensemble)
+    error('Invalid Input to Function, please provide a 2D array that represents an ensemble of realizations of a random process');
+end    
 
-    number_of_samples = size(ensemble, 2);
-    number_of_realizations = size(ensemble, 1);
+number_of_samples = size(ensemble, 2);
+number_of_realizations = size(ensemble, 1);
 
-    max_tau = number_of_samples - 1;  % Maximum time shift = 699
-    autocorrelation = zeros(number_of_samples, 2 * max_tau + 1);  
+max_tau = number_of_samples;  % Maximum time shift = 700
+autocorrelation = zeros(number_of_samples, 2 * max_tau + 1);  
 
-    % Compute autocorrelation for different values of t1 and tau
-    for t1 = 1:number_of_samples
-        for tau = -max_tau:max_tau
-            t2 = t1 + tau;
+% Compute autocorrelation for different values of t1 and tau
 
-            if t2 >= 1 && t2 <= number_of_samples
-                for realization_index = 1:number_of_realizations
-                    autocorrelation(t1, tau + max_tau + 1) = autocorrelation(t1, tau + max_tau + 1) + (ensemble(realization_index, t1) * ensemble(realization_index, t2)) / number_of_realizations;     
-                end    
-            end
-        end    
+for t1 = 1:number_of_samples
+    for tau = -max_tau:max_tau 
+
+        t2 = t1 + tau;
+        %if (t2 <= 0)
+            %t2 = t2 + max_tau;
+        if ((t2 > 700) || (t2 <= 0))
+            t2 = randi([1,700],1,1); % To avoid any discontinuities due to going out of bounds
+        else
+            t2 = t2;
+        end
+
+        for realization_index = 1:number_of_realizations 
+
+                autocorrelation(t1,tau + max_tau + 1) = autocorrelation(t1,tau + max_tau + 1) + ((ensemble(realization_index,t1) * ensemble(realization_index,t2))/number_of_realizations);
+        end
     end
+end
 
-    autocorrelation_average = get_statistical_mean(autocorrelation);
+autocorrelation_average = get_statistical_mean(autocorrelation);
 
 end
 
@@ -258,11 +266,13 @@ end
 
 function calculate_BW(ensemble, autocorrelation_average, number_of_samples, choice)
     % Bandwidth calculation
-    k = -number_of_samples + 1: number_of_samples - 1;
+    k = -number_of_samples : number_of_samples;
     fs = 100;  % Sampling frequency
     
     % Compute the Power Spectral Density (PSD)
-    psd = abs(fftshift(fft(autocorrelation_average)));
+    % Note that we divide by fs to normalize the effect of fourier
+    % transform on the amplitude
+    psd = abs(fftshift(fft(autocorrelation_average)))/fs;
     
     % Define parameters
     A = 4;
@@ -270,7 +280,7 @@ function calculate_BW(ensemble, autocorrelation_average, number_of_samples, choi
     
     % Define the triangular function in time domain
     Tri = @(x, a) max(1 - abs(x) / (a / 2), 0);
-    tau_values = -number_of_samples + 1:number_of_samples - 1;
+    tau_values = -number_of_samples:number_of_samples;
     
     % Frequency axis
     freq_axis = k * fs / (2 * number_of_samples);
@@ -284,21 +294,21 @@ function calculate_BW(ensemble, autocorrelation_average, number_of_samples, choi
     switch choice
         case 1 % Unipolar
             Rx_unipolar = (A^2 / 4) * Tri(tau_values, 2*T) + (A^2 / 4);
-            psd_unipolar = abs(fftshift(fft(Rx_unipolar)));
+            psd_unipolar = abs(fftshift(fft(Rx_unipolar)))/fs;
             plot(freq_axis, psd_unipolar, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Unipolar PSD');
         case 2 % Polar NRZ
             Rx_polar_nrz = (A^2) * Tri(tau_values, 2*T);
-            psd_polar_nrz = abs(fftshift(fft(Rx_polar_nrz)));
+            psd_polar_nrz = abs(fftshift(fft(Rx_polar_nrz)))/fs;
             plot(freq_axis, psd_polar_nrz, 'r--', 'LineWidth', 1.5, 'DisplayName', 'Polar NRZ PSD');
         case 3 % Polar RZ
-            Rx_polar_rz = (A^2 / 2) * Tri(tau_values, 2*T);
-            psd_polar_rz = abs(fftshift(fft(Rx_polar_rz)));
+            Rx_polar_rz = (A^2 / 2) * Tri(tau_values, T);
+            psd_polar_rz = abs(fftshift(fft(Rx_polar_rz)))/fs;
             plot(freq_axis, psd_polar_rz, 'g--', 'LineWidth', 1.5, 'DisplayName', 'Polar RZ PSD');
     end
     
     % Highlight zero-crossing point
-    [~, zero_idx] = min(abs(psd)); % Find nearest zero-crossing index
-    plot(freq_axis(zero_idx), psd(zero_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2, 'DisplayName', 'Zero-Crossing');
+    % [~, zero_idx] = min(abs(psd)); % Find nearest zero-crossing index
+    % plot(freq_axis(zero_idx), psd(zero_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2, 'DisplayName', 'Zero-Crossing');
     
     title("Power Spectral Density (PSD)");
     xlabel("Frequency (Hz)");
@@ -312,7 +322,7 @@ function is_process_stationary(statistical_mean, choice, autocorrelation)
     % Define parameters
     A = 4;  % Amplitude
     T = 7;  % Bit Period in Samples
-    tau_values = -699:699;
+    tau_values = -700:700;
     
     % Define the triangular function
     Tri = @(x, a) max(1 - abs(x) / (a / 2), 0); % Tri function with width a
@@ -341,7 +351,7 @@ function is_process_stationary(statistical_mean, choice, autocorrelation)
     
     % Plot the averaged autocorrelation in bold
     plot(tau_values, autocorrelation, 'k', 'LineWidth', 2.5, 'DisplayName', ...
-        sprintf('Average R_x(\tau), R(0) = %.2f , DC = %.2f', autocorrelation(700), mean(autocorrelation(499+700:699+700))));
+        sprintf('Average R_x(\tau), R(0) = %.2f , DC = %.2f', autocorrelation(701), autocorrelation(1401)));
     
     % Switch case for different choices to sketch the theoretical
     % autocorrelation function:
@@ -353,7 +363,7 @@ function is_process_stationary(statistical_mean, choice, autocorrelation)
             Rx_tau = (A^2) * Tri(tau_values, 2*T);
             plot(tau_values, Rx_tau, 'r--', 'LineWidth', 2, 'DisplayName', 'R_x(\tau) theoretical for Polar NRZ');
         case 3
-            Rx_tau = ((A^2)/2) * Tri(tau_values, 2*T);
+            Rx_tau = ((A^2)/2) * Tri(tau_values, T);
             plot(tau_values, Rx_tau, 'g--', 'LineWidth', 2, 'DisplayName', 'R_x(\tau) theoretical for Polar RZ');
     end
     
