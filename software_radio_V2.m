@@ -3,12 +3,13 @@ number_of_realizations = 500;
 bits_per_realization = 103;
 required_bits_per_realization = 100;
 samples_per_bit = 7;
-realization_index = 1;
+realization_index_first  = 1;
+realization_index_second = 2;
 %%User Interface%%
 choice = input("Enter The Required Line Code:\n1_ Unipolar NRZ\n2_ Polar NRZ\n3_ Polar RZ\n");
 %%Function calls%%
 ensemble_array = generate_ensemble(choice,number_of_realizations,bits_per_realization,required_bits_per_realization,samples_per_bit);
-plot_realization(ensemble_array, realization_index, samples_per_bit, required_bits_per_realization);
+plot_realization(ensemble_array, realization_index_first, realization_index_second, samples_per_bit, required_bits_per_realization);
 sm = get_statistical_mean(ensemble_array);
 plot_statistical_mean(sm);
 [autocorrelation_R,autocorrelation_average_Ravg] = get_autocorrelation(ensemble_array);
@@ -20,7 +21,7 @@ plot_time_mean(tm);
 plot_time_autocorrelation(tm_autocorrelation_function,ensemble_array);
 calculate_BW(ensemble_array,autocorrelation_average_Ravg,size(ensemble_array,2),choice);
 is_process_stationary(sm,choice,autocorrelation_average_Ravg);
-is_process_ergoidic(sm,tm,tm_autocorrelation_function,choice,autocorrelation_average_Ravg);
+is_process_ergoidic(sm,tm,tm_autocorrelation_function,autocorrelation_average_Ravg);
 %%Functions%%
 function ensemble = generate_ensemble(choice,number_of_realizations,bits_per_realization,required_bits_per_realization,samples_per_bit)
     %   This is an ensemble generator function.
@@ -70,20 +71,28 @@ function ensemble = generate_ensemble(choice,number_of_realizations,bits_per_rea
     end
 end
 
-function plot_realization(ensemble, realization_index, samples_per_bit, required_bits_per_realization)
+function plot_realization(ensemble, realization_index_first,realization_index_second, samples_per_bit, required_bits_per_realization)
 % Generate the time vector
     total_samples = required_bits_per_realization * samples_per_bit;
     time = (0:total_samples - 1); % Sample indices as time
 
     % Extract the realization
-    realization_signal = ensemble(realization_index, :);
+    realization_signal_first  = ensemble(realization_index_first, :);
+    realization_signal_second = ensemble(realization_index_second, :);
 
     % Plot
     figure;
-    plot(time, realization_signal, 'LineWidth', 2);
+    subplot(2,1,1);
+    plot(time, realization_signal_first, 'LineWidth', 2);
     xlabel('Time (samples)');
     ylabel('Amplitude');
-    title(['Realization ', num2str(realization_index), ' Line Code']);
+    title(['Realization ', num2str(realization_index_first), ' Line Code']);
+    grid on;
+    subplot(2,1,2);
+    plot(time, realization_signal_second, 'LineWidth', 2);
+    xlabel('Time (samples)');
+    ylabel('Amplitude');
+    title(['Realization ', num2str(realization_index_second), ' Line Code']);
     grid on;
 end
 
@@ -232,7 +241,7 @@ function [time_autocorrelation,time_autocorrelation_function] = get_time_autocor
     number_of_samples = size(ensemble,2);
     number_of_realizations = size(ensemble,1);
 
-    max_tau = number_of_samples-1;  % Maximum lag
+    max_tau = number_of_samples;  % Maximum lag
     time_autocorrelation = zeros(1, max_tau + 1); % Stores final autocorrelation values
     % Compute time autocorrelation function
     for tau = 0:max_tau
@@ -252,7 +261,7 @@ end
 
 function plot_time_autocorrelation(time_autocorrelation_function,ensemble)
     %time autocorrelation plotting
-    tau_values = -699:699;  % Range for symmetric shifts
+    tau_values = -700:700;  % Range for symmetric shifts
     % Plot the autocorrelation function
     figure;
     plot(tau_values, time_autocorrelation_function, 'k', 'LineWidth', 2.5, 'DisplayName', '<R_x(\tau)>');
@@ -305,11 +314,6 @@ function calculate_BW(ensemble, autocorrelation_average, number_of_samples, choi
             psd_polar_rz = abs(fftshift(fft(Rx_polar_rz)))/fs;
             plot(freq_axis, psd_polar_rz, 'g--', 'LineWidth', 1.5, 'DisplayName', 'Polar RZ PSD');
     end
-    
-    % Highlight zero-crossing point
-    % [~, zero_idx] = min(abs(psd)); % Find nearest zero-crossing index
-    % plot(freq_axis(zero_idx), psd(zero_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2, 'DisplayName', 'Zero-Crossing');
-    
     title("Power Spectral Density (PSD)");
     xlabel("Frequency (Hz)");
     ylabel("PSD");
@@ -376,11 +380,11 @@ function is_process_stationary(statistical_mean, choice, autocorrelation)
     hold off;
 end
 
-function is_process_ergoidic(statistical_mean,time_mean,time_autocorrelation,choice,autocorrelation)
+function is_process_ergoidic(statistical_mean,time_mean,time_autocorrelation,autocorrelation)
+    tau_values = -700:700;
     avg_value_sm = mean(statistical_mean);
     avg_value_tm = mean(time_mean);
     figure;
-    %plot(statistical_mean, 'LineWidth', 1.5);
     subplot(1,2,1);
     plot(statistical_mean, 'LineWidth', 1.5, 'DisplayName', ['Average mean = ', num2str(avg_value_sm)]);
     xlabel('Time (samples)');
@@ -397,4 +401,28 @@ function is_process_ergoidic(statistical_mean,time_mean,time_autocorrelation,cho
     legend show;
     grid on;
     xlim([1 length(time_mean)]);
+    
+    figure;
+    hold on;
+    subplot(1,2,1);
+    plot(tau_values, autocorrelation, 'k', 'LineWidth', 2.5, 'DisplayName', ...
+        sprintf('Average R_x(\tau), R(0) = %.2f , DC = %.2f', autocorrelation(701), autocorrelation(1401)));
+    xlabel('\tau (Time Shift)');
+    ylabel('Autocorrelation R_x(t_1, \tau)');
+    title('Autocorrelation Function Average');
+    legend show;
+    grid on;
+    hold off;
+    
+    hold on;
+    subplot(1,2,2);
+    plot(tau_values, time_autocorrelation, 'k', 'LineWidth', 2.5, 'DisplayName', ...
+        sprintf('Average R_t(\tau), R(0) = %.2f , DC = %.2f', time_autocorrelation(701), time_autocorrelation(1399)));
+    xlabel('\tau (Time Shift)');
+    ylabel('Autocorrelation R_x(t_1, \tau)');
+    title('Time Autocorrelation Function');
+    legend show;
+    grid on;
+    hold off;
+    
 end
